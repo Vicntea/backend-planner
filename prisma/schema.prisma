@@ -1,0 +1,179 @@
+// Static reference schema for public and the initial tenant.
+// Runtime tenant access uses pg because future schemas are dynamic.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "client_00000000"]
+}
+
+model Tenant {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rut            String                @unique @db.VarChar(12)
+  nombre         String                @db.VarChar(150)
+  slug           String                @unique @db.VarChar(100)
+  schemaName     String                @unique @map("schema_name") @db.VarChar(63)
+  timezone       String                @default("America/Santiago") @db.VarChar(64)
+  activo         Boolean               @default(true)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  config         TenantConfig?
+  members        TenantMember[]
+  schemaVersions TenantSchemaVersion[]
+
+  @@map("tenants")
+  @@schema("public")
+}
+
+model TenantConfig {
+  tenantId        String    @id @map("tenant_id") @db.Uuid
+  nombreComercial String    @map("nombre_comercial") @db.VarChar(200)
+  telefono        String?   @db.VarChar(30)
+  email           String?   @db.VarChar(255)
+  direccion       String?   @db.VarChar(300)
+  checkInTime     DateTime? @map("check_in_time") @db.Time(0)
+  checkOutTime    DateTime? @map("check_out_time") @db.Time(0)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_config")
+  @@schema("public")
+}
+
+model TenantMember {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      String   @default("member") @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, userId])
+  @@index([userId])
+  @@map("tenant_members")
+  @@schema("public")
+}
+
+model TenantSchemaVersion {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  version   Int
+  checksum  String   @db.VarChar(64)
+  appliedAt DateTime @default(now()) @map("applied_at") @db.Timestamptz(6)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, version])
+  @@map("tenant_schema_versions")
+  @@schema("public")
+}
+
+model VoucherConfig {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  logoUrl     String?  @map("logo_url") @db.Text
+  designJson  Json     @default("{}") @map("design_json")
+  showPhone   Boolean  @default(true) @map("show_phone")
+  showEmail   Boolean  @default(true) @map("show_email")
+  showAddress Boolean  @default(true) @map("show_address")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("voucher_config")
+  @@schema("client_00000000")
+}
+
+model Cliente {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre        String    @db.VarChar(100)
+  apellido      String?   @db.VarChar(100)
+  email         String?   @db.VarChar(255)
+  telefono      String?   @db.VarChar(30)
+  rutCifrado    Bytes?    @map("rut_cifrado")
+  rutLookup     Bytes?    @unique @map("rut_lookup")
+  rutKeyVersion Int       @default(1) @map("rut_key_version") @db.SmallInt
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  reservas      Reserva[]
+
+  @@index([email])
+  @@index([nombre])
+  @@map("clientes")
+  @@schema("client_00000000")
+}
+
+model Habitacion {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre      String    @unique @db.VarChar(100)
+  tipo        String?   @db.VarChar(50)
+  descripcion String?   @db.Text
+  capacidad   Int       @default(1)
+  precioNoche Decimal   @default(0) @map("precio_noche") @db.Decimal(12, 2)
+  moneda      String    @default("CLP") @db.VarChar(3)
+  estado      String    @default("activa") @db.VarChar(30)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  reservas    Reserva[]
+
+  @@index([estado])
+  @@map("habitaciones")
+  @@schema("client_00000000")
+}
+
+model Voucher {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  base64    String    @db.Text
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  reservas  Reserva[]
+
+  @@map("vouchers")
+  @@schema("client_00000000")
+}
+
+model Reserva {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  habitacionId      String           @map("habitacion_id") @db.Uuid
+  clienteId         String           @map("cliente_id") @db.Uuid
+  voucherId         String?          @map("voucher_id") @db.Uuid
+  codigo            String           @unique @db.VarChar(30)
+  checkIn           DateTime         @map("check_in") @db.Date
+  checkOut          DateTime         @map("check_out") @db.Date
+  estado            String           @default("pendiente") @db.VarChar(30)
+  cantidadHuespedes Int              @default(1) @map("cantidad_huespedes")
+  precioNoche       Decimal          @default(0) @map("precio_noche") @db.Decimal(12, 2)
+  subtotal          Decimal          @default(0) @db.Decimal(12, 2)
+  descuento         Decimal          @default(0) @db.Decimal(12, 2)
+  impuestos         Decimal          @default(0) @db.Decimal(12, 2)
+  total             Decimal          @default(0) @db.Decimal(12, 2)
+  moneda            String           @default("CLP") @db.VarChar(3)
+  notas             String?          @db.Text
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  habitacion        Habitacion       @relation(fields: [habitacionId], references: [id])
+  cliente           Cliente          @relation(fields: [clienteId], references: [id])
+  voucher           Voucher?         @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  huespedes         ReservaHuesped[]
+
+  @@unique([voucherId])
+  @@index([habitacionId])
+  @@index([clienteId])
+  @@index([checkIn, checkOut])
+  @@index([estado])
+  @@map("reservas")
+  @@schema("client_00000000")
+}
+
+model ReservaHuesped {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reservaId String   @map("reserva_id") @db.Uuid
+  nombre    String   @db.VarChar(100)
+  apellido  String?  @db.VarChar(100)
+  edad      Int?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  reserva   Reserva  @relation(fields: [reservaId], references: [id], onDelete: Cascade)
+
+  @@index([reservaId])
+  @@map("reserva_huespedes")
+  @@schema("client_00000000")
+}

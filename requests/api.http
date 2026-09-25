@@ -1,0 +1,123 @@
+@baseUrl = http://localhost:3000
+@accessToken = replace-with-owner-access-token
+@tenantId = replace-with-tenant-uuid
+@newUserEmail = new-user@example.com
+@newUserPassword = replace-with-a-strong-password
+@clientId = 00000000-0000-0000-0000-000000000000
+@habitacionId = 00000000-0000-0000-0000-000000000000
+@reservaId = 00000000-0000-0000-0000-000000000000
+
+### Health público
+GET {{baseUrl}}/api/public/health
+Accept: application/json
+
+### Usuario autenticado
+GET {{baseUrl}}/api/protected/me
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Tenants disponibles para el usuario
+GET {{baseUrl}}/api/protected/tenants
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Owner crea un usuario dentro del tenant
+# El rol owner está autorizado. No devuelve tokens.
+POST {{baseUrl}}/api/protected/tenants/{{tenantId}}/users
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "email": "{{newUserEmail}}",
+  "password": "{{newUserPassword}}",
+  "role": "member",
+  "emailConfirm": true
+}
+
+### Preview de un futuro listado tenant-scoped
+# Endpoint planeado; aún no implementado.
+# El schema se resuelve internamente desde X-Tenant-Id, nunca desde el body.
+GET {{baseUrl}}/api/protected/clientes
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+Accept: application/json
+
+### Preview: crear cliente en schema tenant
+# Endpoint planeado. El RUT se envía normalizado; el backend cifra y genera HMAC.
+POST {{baseUrl}}/api/protected/clientes
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+Content-Type: application/json
+
+{
+  "nombre": "Nombre",
+  "apellido": "Apellido",
+  "email": "cliente@example.com",
+  "telefono": "+56900000000",
+  "rut": "12345678-5"
+}
+
+### Preview: cliente por ID
+GET {{baseUrl}}/api/protected/clientes/{{clientId}}
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+Accept: application/json
+
+### Preview: actualizar cliente
+PUT {{baseUrl}}/api/protected/clientes/{{clientId}}
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+Content-Type: application/json
+
+{
+  "email": "nuevo-email@example.com"
+}
+
+### Preview: eliminar cliente
+DELETE {{baseUrl}}/api/protected/clientes/{{clientId}}
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+
+### Preview: listar habitaciones del schema
+GET {{baseUrl}}/api/protected/habitaciones
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+Accept: application/json
+
+### Preview: crear habitación
+POST {{baseUrl}}/api/protected/habitaciones
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+Content-Type: application/json
+
+{
+  "nombre": "Habitación 101",
+  "tipo": "double",
+  "capacidad": 2,
+  "precioNoche": 50000,
+  "moneda": "CLP",
+  "estado": "activa"
+}
+
+### Preview: listar reservas
+GET {{baseUrl}}/api/protected/reservas?page=1&limit=20
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+Accept: application/json
+
+### Preview: crear reserva
+POST {{baseUrl}}/api/protected/reservas
+Authorization: Bearer {{accessToken}}
+X-Tenant-Id: {{tenantId}}
+Content-Type: application/json
+
+{
+  "habitacionId": "{{habitacionId}}",
+  "clienteId": "{{clientId}}",
+  "checkIn": "2026-10-01",
+  "checkOut": "2026-10-05",
+  "cantidadHuespedes": 2,
+  "precioNoche": 50000,
+  "moneda": "CLP"
+}

@@ -6,19 +6,43 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:audit": "node scripts/audit-rls.mjs",
+    "user:bootstrap-owner": "node scripts/bootstrap-tenant-owner.mjs",
+    "user:link": "node scripts/link-auth-user.mjs",
+    "tenant:provision": "node scripts/provision-tenant.mjs",
+    "prisma:format": "prisma format",
+    "prisma:validate": "prisma validate",
+    "prisma:generate": "prisma generate"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "@supabase/middleware": "0.6.0",
+    "@supabase/server": "1.8.0",
+    "@supabase/supabase-js": "2.117.1",
     "next": "16.3.6",
+    "pg": "8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^22.20.4",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
-    "typescript": "^5"
+    "prisma": "7.10.0",
+    "typescript": "^5",
+    "vitest": "^5.0.1"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2",
+    "mysql2": "3.24.4"
   }
 }
