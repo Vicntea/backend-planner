@@ -1,0 +1,46 @@
+# Implementación: Endpoints de Reservas (Planner)
+
+## Ubicación
+- `src/app/api/v1/private/reservas/route.ts` (listar y crear)
+- `src/app/api/v1/private/reservas/[reservaId]/route.ts` (obtener, modificar, eliminar)
+
+## Nivel de acceso
+`private` — requiere header `X-Tenant-RUT` y autenticación.
+
+## Operaciones
+
+### GET /reservas
+Listar reservas del tenant con filtros opcionales:
+- `habitacionId` (UUID)
+- `estado` (string)
+- `checkIn`, `checkOut` (fecha)
+- `page`, `pageSize` (paginación)
+
+Incluye relación con `habitacion`, `cliente`, `huespedes`.
+
+### POST /reservas
+Crear una reserva. Validaciones:
+1. `checkOut` debe ser posterior a `checkIn`.
+2. **Bloqueo de solapamiento**: se consulta si existe otra reserva en la misma habitación con estado `pendiente` o `confirmada` y fechas que se solapen (`daterange`). Si existe → `409 CONFLICT`.
+3. Se calcula `subtotal`, `descuento`, `impuestos`, `total`.
+4. Se genera `codigo` automático.
+5. Opcional: crear `huespedes` embebidos.
+
+### PATCH /reservas/:id
+Modificar una reserva. Validaciones:
+1. La reserva debe existir → `404 NOT_FOUND`.
+2. Si se cambian fechas o habitación, se re-valida solapamiento **excluyendo la reserva actual** (`id: { not: reservaId }`).
+3. Recalcula montos si cambian `precioNoche`, `descuento`, `impuestos` o fechas.
+4. Reemplaza huéspedes si se envían en el body.
+
+### DELETE /reservas/:id
+Eliminar una reserva físicamente (cascade elimina `reserva_huespedes`).
+
+## Bloqueo de solapamiento
+- **Aplicación**: consulta previa con `findFirst` usando rangos de fechas antes de escribir.
+- **Base de datos**: constraint `EXCLUDE USING GIST` (`evitar_reservas_solapadas`) en la tabla `reservas` para estados `pendiente` y `confirmada`.
+- Si PostgreSQL lanza error por el `EXCLUDE` (race condition), se captura y se devuelve `409 CONFLICT`.
+
+## Archivos afectados
+- `src/app/api/v1/private/reservas/route.ts`
+- `src/app/api/v1/private/reservas/[reservaId]/route.ts`

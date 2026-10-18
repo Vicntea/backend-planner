@@ -1,0 +1,28 @@
+# Implementación: Prisma Multi-Tenant por Schema
+
+## Problema
+Prisma califica las tablas con `@@schema("client_00000000")` en tiempo de compilación, lo que impide consultar dinámicamente distintos schemas de tenant sin reescribir el código.
+
+## Solución aplicada
+
+1. **Quitar `@@schema` de todos los modelos** en `prisma/schema.prisma`.
+   - Modelos de administración (`Tenant`, `TenantConfig`, `TenantMember`, `TenantSchemaVersion`): antes tenían `@@schema("public")`, ahora sin schema.
+   - Modelos de tenant (`Cliente`, `Habitacion`, `Reserva`, `ReservaHuesped`, `Voucher`, `VoucherConfig`): antes tenían `@@schema("client_00000000")`, ahora sin schema.
+   - Datasource: eliminado `schemas = ["public", "client_00000000"]`, ahora solo `provider = "postgresql"`.
+
+2. **Cliente Prisma por schema** en `src/lib/prisma/clients.ts`:
+   - `getPublicPrisma()`: conexión con `search_path=public`.
+   - `getTenantPrisma(schemaName)`: conexión con `search_path=client_<rut>,public`.
+   - Los clientes se cachean en un `Map` por nombre de schema para no crear pools innecesarios.
+   - Validación del schema contra `/^client_[0-9]{7,8}$/` antes de construir la URL (evita inyección SQL).
+
+3. **Uso en endpoints**: el middleware resuelve el `schemaName` del header `X-Tenant-RUT`, obtiene el cliente Prisma de ese schema y lo inyecta en `context.prisma`. Las consultas se escriben normalmente:
+   ```ts
+   await prisma.reserva.create({ data: { ... } });
+   ```
+   Prisma no califica el nombre de tabla; PostgreSQL resuelve `reservas` contra el `search_path` activo.
+
+## Archivos afectados
+- `prisma/schema.prisma`
+- `src/lib/prisma/clients.ts`
+- `.env` (agregado `DATABASE_URL` y `SUPABASE_DB_URL`)

@@ -1,0 +1,62 @@
+# Implementación: Middleware de Niveles de Acceso
+
+## Ubicación
+`src/lib/http/middleware.ts`
+
+## Niveles definidos
+
+### `withPublic`
+- Sin autenticación.
+- Sin tenant obligatorio.
+- Usa `getPublicPrisma()` (`search_path=public`).
+- Ejemplo: `GET /api/v1/public/health`.
+
+### `withProtected`
+- Autenticación obligatoria vía Supabase JWT (`withUserPostgres`).
+- Sin tenant obligatorio por defecto.
+- **Opción `withTenant: true`**: resuelve el tenant de forma **opcional** con `resolveTenantOptional(request, auth, postgres)`:
+  - Si `X-Tenant-RUT` está presente y el tenant/membresía es válida → inyecta `context.tenant` y `context.prisma` (schema `client_<digitsRUT>`).
+  - Si el header falta o el tenant no se resuelve → `context.tenant`/`context.prisma` quedan `undefined`; el handler debe lanzar `ValidationError("X-Tenant-RUT es requerido")` → `400`.
+- **No valida API Key**: la validación de API Key será **por cliente** (una key por tenant) y está pendiente de implementar; hoy no se valida en ningún nivel.
+- Ejemplo sin tenant: `GET /api/v1/protected/me`, `GET /api/v1/protected/tenants`.
+- Ejemplo con tenant: rutas de reservas y habitaciones bajo `api/v1/private/*` — usan `withProtected((req, ctx) => handler, { withTenant: true })`.
+
+### `withPrivate`
+- Autenticación obligatoria vía Supabase JWT.
+- **`X-Tenant-RUT` obligatorio** en los headers. Si falta → `400 VALIDATION_ERROR`.
+- **API Key:** pendiente de implementar. El diseño previsto es una API Key **por cliente** (una por tenant, enviada vía `X-API-Key`); actualmente no se valida ninguna y no existe variable de entorno asociada.
+- Resuelve el tenant en `public.tenants` por RUT y valida membresía del usuario autenticado.
+- Si el tenant no existe o está inactivo → `404 TENANT_NOT_FOUND`.
+- Si el usuario no es miembro → `403 FORBIDDEN`.
+- Inyecta `context.prisma` (cliente del schema del tenant) y `context.tenant`.
+- **No hay fallback automático a `public`** cuando se requiere tenant.
+- *Estado actual:* nivel definido en el middleware pero **sin rutas asignadas**; los endpoints de planner usan `withProtected` + `withTenant`.
+
+## Flujo de `withProtected(..., { withTenant: true })` (reservas/habitaciones)
+1. `withUserPostgres` valida el JWT de Supabase y entrega `auth` + `postgres`.
+2. `resolveTenantOptional(request, auth, postgres)` lee `X-Tenant-RUT`:
+   - Sin header → `null`.
+   - Con header → consulta `public.tenant_members` join `public.tenants` (RUT + `schema_name` + membresía + `activo`).
+   - Sin coincidencia → `null`.
+3. Si hay tenant → `getTenantPrisma(schemaName)` crea/reutiliza un `PrismaClient` con `search_path=client_<rut>,public` y se inyecta `context.tenant`/`context.prisma`.
+4. Si no → el handler recibe `tenant`/`prisma` como `undefined` y lanza `ValidationError("X-Tenant-RUT es requerido")` → `400 VALIDATION_ERROR`.
+5. **No se valida `X-API-Key`** en este flujo.
+
+## Flujo de `withPrivate`
+1. `withUserPostgres` valida el JWT de Supabase y entrega `auth` + `postgres`.
+2. `parseTenantRef(headers)` lee `X-Tenant-RUT` y valida formato `^\d{7,8}-[0-9K]$`.
+3. `resolveTenantByRut(auth, postgres, rut)` consulta `public.tenant_members` join `public.tenants`.
+4. `getTenantPrisma(schemaName)` crea o reutiliza un `PrismaClient` con `search_path=client_<rut>,public`.
+5. Se ejecuta el handler con `context = { auth, tenant, postgres, prisma }`.
+6. *Pendiente:* aquí se agregará la validación de la API Key **por cliente** (una key por tenant) cuando se defina su diseño y almacenamiento.
+
+## Si falta `X-Tenant-RUT`
+→ `400 VALIDATION_ERROR` ("X-Tenant-RUT es requerido"). Aplica tanto en `private` (`withPrivate`) como en las rutas del planner (`withProtected` + `withTenant`, donde un tenant no resuelto también responde `400`).
+
+## Sin fallback a `public`
+Endpoints que requieren tenant nunca caen en schema `public` automáticamente. El schema `public` solo se usa en endpoints `public` o `protected` que no requieren tenant.
+
+## Archivos afectados
+- `src/lib/http/middleware.ts`
+- `src/tenancy/parse-tenant-ref.ts`
+- `src/lib/prisma/clients.ts`

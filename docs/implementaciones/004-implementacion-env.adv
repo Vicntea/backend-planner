@@ -1,0 +1,18 @@
+# Implementación: Variables de Entorno
+
+## Archivo `.env` actualizado
+
+Se agregaron las siguientes variables necesarias para Prisma CLI y el cliente de Prisma:
+
+```
+DATABASE_URL=postgresql://postgres:password@db.dkqpjqmxesztbwlbgaze.supabase.co:5432/postgres
+SUPABASE_DB_URL=postgresql://postgres:password@db.dkqpjqmxesztbwlbgaze.supabase.co:5432/postgres
+DIRECT_URL=postgresql://postgres:password@db.dkqpjqmxesztbwlbgaze.supabase.co:5432/postgres
+```
+
+## Uso
+- `DATABASE_URL` / `DIRECT_URL`: usadas por `prisma generate` y `prisma config`.
+- `SUPABASE_DB_URL`: usada por `@supabase/server` para conexiones RLS y por `getRlsDatabaseUrl()` en `src/config/env.ts`.
+
+## Nota
+Reemplazar `postgres:password` por las credenciales reales de la instancia Supabase en producción.
